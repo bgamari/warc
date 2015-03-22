@@ -1,6 +1,10 @@
+{-# LANGUAGE RankNTypes #-}
+
 module Data.Warc
-    ( Record (..)
-    , parseWarcRecords
+    ( Record(..)
+    , Warc(..)
+    , parseWarc
+    , iterRecords
     ) where
 
 import Pipes (Producer, yield)
@@ -9,6 +13,7 @@ import Control.Lens
 import qualified Pipes.Attoparsec as PA
 import qualified Data.ByteString as BS
 import Data.ByteString (ByteString)
+import Control.Monad (void)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Either
 import Control.Monad.Trans.Free
@@ -33,8 +38,8 @@ instance Monad m => Monoid (Warc m) where
     Warc a `mappend` Warc b = Warc (a >> b)
     mempty = Warc (return (return ()))
 
-parseWarcRecords :: (Functor m, Monad m) => Producer ByteString m () -> Warc m
-parseWarcRecords = Warc . loop
+parseWarc :: (Functor m, Monad m) => Producer ByteString m () -> Warc m
+parseWarc = Warc . loop
   where
     loop upstream = FreeT $ do
         (hdr, rest) <- runStateT (PA.parse header) upstream
@@ -48,3 +53,12 @@ parseWarcRecords = Warc . loop
             let produceBody = rest ^. PBS.splitAt len
             return $ Free $ Record ver fields $ fmap loop produceBody
 
+iterRecords :: Monad m => (forall a. Record m a -> m a) -> Warc m -> m (Producer BS.ByteString m ())
+iterRecords f (Warc free) = go free
+  where
+    go (FreeT action) = action >>= \next -> do
+        case next of
+          Pure a -> return a
+          Free record -> do
+              rest <- f record
+              go rest
