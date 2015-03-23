@@ -7,6 +7,7 @@ module Data.Warc
     , iterRecords
     ) where
 
+import Data.Char (ord)
 import Pipes (Producer, yield)
 import qualified Pipes.ByteString as PBS
 import Control.Lens
@@ -50,8 +51,11 @@ parseWarc = Warc . loop
       | Just (Left err) <- hdr            = error $ show err
       | Just (Right (ver, fields)) <- hdr = do
             let [len] = toListOf (each . _ContentLength) fields
-            let produceBody = rest ^. PBS.splitAt len
-            return $ Free $ Record ver fields $ fmap loop produceBody
+            let produceBody = fmap consumeWhitespace . view (PBS.splitAt len)
+                consumeWhitespace = PBS.dropWhile isEOL
+                isEOL c = c == ord8 '\r' || c == ord8 '\n'
+                ord8 = fromIntegral . ord
+            return $ Free $ Record ver fields $ fmap loop $ produceBody rest
 
 iterRecords :: Monad m => (forall a. Record m a -> m a) -> Warc m -> m (Producer BS.ByteString m ())
 iterRecords f (Warc free) = go free
