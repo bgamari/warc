@@ -25,6 +25,7 @@ testIter = do
             liftIO $ print (recWarcVersion r)
             liftIO $ print (recHeader r)
             runEffect $ recContent r >-> PBS.toHandle stdout
-    iterRecords go $ parseWarc (PBS.fromHandle stdin)
+    rest <- iterRecords go $ parseWarc (PBS.fromHandle stdin)
+    runEffect $ rest >-> PBS.toHandle stdout
 
 main = testIter
