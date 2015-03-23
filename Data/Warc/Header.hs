@@ -34,6 +34,7 @@ module Data.Warc.Header
 
 import Control.Applicative
 import Control.Monad (void)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Time.Clock
 import Data.Time.Format
@@ -105,9 +106,9 @@ quotedString = do
     char '"'
     return c
 
-field :: ByteString -> Parser a -> Parser a
+field :: Parser name -> Parser a -> Parser a
 field name content = do
-    try $ string name
+    try name
     char ':'
     skipSpace
     content <* endOfLine
@@ -229,7 +230,9 @@ warcField = choice
 -- | A WARC header
 header :: Parser (Version, [Field])
 header = do
+    skipSpace
     ver <- version <* endOfLine
-    fields <- many warcField
+    let unknownField = field token (takeTill (isEndOfLine . ord') *> return Nothing)
+    fields <- many $ (Just <$> warcField) <|> unknownField
     endOfLine
-    return (ver, fields)
+    return (ver, catMaybes fields)

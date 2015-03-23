@@ -19,12 +19,12 @@ testPipe = withFile "bbc.warc" ReadMode $ \h->do
     print (recHeader r)
 -}
 
-testIter = withFile "bbc.warc" ReadMode $ \h->do
+testIter = do
     let go :: MonadIO m => Record m a -> m a
         go r = do
             liftIO $ print (recWarcVersion r)
             liftIO $ print (recHeader r)
             runEffect $ recContent r >-> PBS.toHandle stdout
-    iterRecords go $ parseWarc (PBS.fromHandle h)
+    iterRecords go $ parseWarc (PBS.fromHandle stdin)
 
 main = testIter
