@@ -50,11 +50,14 @@ import qualified Data.ByteString.Char8 as BS
 
 import Control.Lens
 
+withName :: String -> Parser a -> Parser a
+withName name parser = parser <?> name
+
 data Version = Version {versionMajor, versionMinor :: !Int}
              deriving (Show, Read, Eq, Ord)
 
 version :: Parser Version
-version = do
+version = withName "version" $ do
     "WARC/"
     major <- decimal
     char '.'
@@ -229,10 +232,10 @@ warcField = choice
 
 -- | A WARC header
 header :: Parser (Version, [Field])
-header = do
+header = withName "header" $ do
     skipSpace
     ver <- version <* endOfLine
     let unknownField = field token (takeTill (isEndOfLine . ord') *> return Nothing)
-    fields <- many $ (Just <$> warcField) <|> unknownField
+    fields <- withName "fields" $ many $ (Just <$> warcField) <|> unknownField
     endOfLine
     return (ver, catMaybes fields)
