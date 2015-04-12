@@ -1,7 +1,7 @@
 name:                warc
 version:             0.1.0.0
-synopsis:            A Pipes-based parser for the Web Archive (WARC) format
--- description:         
+synopsis:            A parser for the Web Archive (WARC) format
+description:         A streaming parser for the Web Archive (WARC) format.
 homepage:            http://github.com/bgamari/warc
 license:             BSD3
 license-file:        LICENSE
@@ -11,6 +11,10 @@ copyright:           (c) 2015 Ben Gamari
 category:            Data
 build-type:          Simple
 cabal-version:       >=1.10
+
+source-repository head
+  type:                git
+  location:            git://github.com/bgamari/warc
 
 library
   exposed-modules:     Data.Warc, Data.Warc.Header
