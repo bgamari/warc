@@ -204,8 +204,9 @@ makePrisms ''Field
 date :: Parser UTCTime
 date = do
     s <- takeTill isSpace
-    parseTimeM False defaultTimeLocale fmt (BS.unpack s)
-  where fmt = iso8601DateFormat (Just "%H:%M:%SZ")
+    parseTimeM False defaultTimeLocale dateFmt (BS.unpack s)
+
+dateFmt = iso8601DateFormat (Just "%H:%M:%SZ")
 
 warcField :: Parser Field
 warcField = choice
@@ -239,3 +240,20 @@ header = withName "header" $ do
     fields <- withName "fields" $ many $ (Just <$> warcField) <|> unknownField
     endOfLine
     return (ver, catMaybes fields)
+
+encodeHeader :: Version -> [Field] -> BB.Builder
+encodeHeader (Version maj min) flds =
+    "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
+
+encodeDate :: UTCTime -> BB.Builder
+encodeDate = BB.string . formatTime dateFmt defaultTimeLocale
+
+encodeField :: Field -> BB.Builder
+encodeField fld =
+    case fld of
+        WarcRecordId (RecordId r)  -> field "WARC-Record-ID" (BB.byteString r)
+        ContentLength len          -> field "Content-Length" (BB.integerDec len)
+        WarcDate t                 -> field "WARC-Date" (encodeDate t)
+  where
+    field :: BB.Builder -> BB.Builder -> BB.Builder
+    field name val = name <> ": " <> val
