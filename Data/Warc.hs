@@ -39,6 +39,7 @@ instance Monad m => Monoid (Warc m) where
     Warc a `mappend` Warc b = Warc (a >> b)
     mempty = Warc (return (return ()))
 
+-- | Parse a WARC archive.
 parseWarc :: (Functor m, Monad m) => Producer ByteString m () -> Warc m
 parseWarc = Warc . loop
   where
@@ -57,7 +58,11 @@ parseWarc = Warc . loop
                 ord8 = fromIntegral . ord
             return $ Free $ Record ver fields $ fmap loop $ produceBody rest
 
-iterRecords :: Monad m => (forall a. Record m a -> m a) -> Warc m -> m (Producer BS.ByteString m ())
+-- | Iterate over the 'Record's in a WARC archive
+iterRecords :: Monad m
+            => (forall a. Record m a -> m a)    -- ^ consume the records
+            -> Warc m                           -- ^ a WARC archive (see 'parseWarc')
+            -> m (Producer BS.ByteString m ())  -- ^ returns any leftovers
 iterRecords f (Warc free) = go free
   where
     go (FreeT action) = action >>= \next -> do
