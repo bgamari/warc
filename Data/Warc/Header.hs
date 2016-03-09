@@ -8,6 +8,7 @@ module Data.Warc.Header
     , TruncationReason (..)
     , Digest (..)
     , header
+    , encodeHeader
       -- * Header field types
     , Field (..)
       -- ** Prisms
@@ -47,6 +48,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Builder as BB
 
 import Control.Lens
 
@@ -140,18 +142,44 @@ warcType = choice
      , FutureType <$> utf8Token
      ]
 
-newtype RecordId = RecordId ByteString
-                 deriving (Show, Read, Eq, Ord)
+encodeText :: T.Text -> BB.Builder
+encodeText = BB.byteString . TE.encodeUtf8
 
-uri :: Parser ByteString
+encodeWarcType :: WarcType -> BB.Builder
+encodeWarcType WarcInfo       = "warcinfo"
+encodeWarcType Response       = "response"
+encodeWarcType Resource       = "resource"
+encodeWarcType Request        = "request"
+encodeWarcType Metadata       = "metadata"
+encodeWarcType Revisit        = "revisit"
+encodeWarcType Conversion     = "conversion"
+encodeWarcType Continuation   = "continuation"
+encodeWarcType (FutureType t) = encodeText t
+
+newtype Uri = Uri ByteString
+            deriving (Show, Read, Eq, Ord)
+
+uri :: Parser Uri
 uri = do
     char '<'
     s <- takeTill (== '>')
     char '>'
-    return s
+    return $ Uri s
+
+laxUri :: Parser Uri
+laxUri = Uri <$> takeTill (isEndOfLine . ord')
+
+encodeUri :: Uri -> BB.Builder
+encodeUri (Uri b) = BB.char7 '<' <> BB.byteString b <> BB.char7 '>'
+
+newtype RecordId = RecordId Uri
+                 deriving (Show, Read, Eq, Ord)
 
 recordId :: Parser RecordId
 recordId = RecordId <$> uri
+
+encodeRecordId :: RecordId -> BB.Builder
+encodeRecordId (RecordId r) = encodeUri r
 
 data TruncationReason = TruncLength
                       | TruncTime
@@ -169,6 +197,13 @@ truncationReason = choice
     , TruncOther <$> utf8Token
     ]
 
+encodeTruncationReason :: TruncationReason -> BB.Builder
+encodeTruncationReason TruncLength      = "length"
+encodeTruncationReason TruncTime        = "time"
+encodeTruncationReason TruncDisconnect  = "disconnect"
+encodeTruncationReason TruncUnspecified = "unspecified"
+encodeTruncationReason (TruncOther o)   = encodeText o
+
 data Digest = Digest { digestAlgorithm, digestHash :: !ByteString }
             deriving (Show, Read, Eq, Ord)
 
@@ -178,21 +213,25 @@ digest = do
     hash <- token
     return $ Digest algo hash
 
+encodeDigest :: Digest -> BB.Builder
+encodeDigest (Digest algo hash) =
+    BB.byteString algo <> ":" <> BB.byteString hash
+
 data Field = WarcRecordId !RecordId
            | ContentLength !Integer
            | WarcDate !UTCTime
            | WarcType !WarcType
            | ContentType !ByteString
-           | WarcConcurrentTo [RecordId]
+           | WarcConcurrentTo !RecordId
            | WarcBlockDigest !Digest
            | WarcPayloadDigest !Digest
            | WarcIpAddress !ByteString
-           | WarcRefersTo !ByteString
-           | WarcTargetUri !ByteString
+           | WarcRefersTo !Uri
+           | WarcTargetUri !Uri
            | WarcTruncated !TruncationReason
            | WarcWarcinfoId !RecordId
            | WarcFilename !Text
-           | WarcProfile !ByteString
+           | WarcProfile !Uri
            | WarcIdentifiedPayloadType !ByteString
            | WarcSegmentNumber !Integer
            | WarcSegmentOriginId !ByteString
@@ -204,9 +243,12 @@ makePrisms ''Field
 date :: Parser UTCTime
 date = do
     s <- takeTill isSpace
-    parseTimeM False defaultTimeLocale dateFmt (BS.unpack s)
+    parseTimeM False defaultTimeLocale dateFormat (BS.unpack s)
 
-dateFmt = iso8601DateFormat (Just "%H:%M:%SZ")
+encodeDate :: UTCTime -> BB.Builder
+encodeDate = BB.string7 . formatTime defaultTimeLocale dateFormat
+
+dateFormat = iso8601DateFormat (Just "%H:%M:%SZ")
 
 warcField :: Parser Field
 warcField = choice
@@ -215,12 +257,12 @@ warcField = choice
     , field "WARC-Date" (WarcDate <$> date)
     , field "WARC-Type" (WarcType <$> warcType)
     , field "Content-Type" (ContentType <$> takeTill (isEndOfLine . ord'))
-    , field "WARC-Concurrent-To" (WarcConcurrentTo <$> many1 recordId)
+    , field "WARC-Concurrent-To" (WarcConcurrentTo <$> recordId)
     , field "WARC-Block-Digest" (WarcBlockDigest <$> digest)
     , field "WARC-Payload-Digest" (WarcPayloadDigest <$> digest)
     , field "WARC-IP-Address" (WarcIpAddress <$> takeTill (isEndOfLine . ord'))
     , field "WARC-Refers-To" (WarcRefersTo <$> uri)
-    , field "WARC-Target-URI" (WarcTargetUri <$> takeTill (isEndOfLine . ord'))
+    , field "WARC-Target-URI" (WarcTargetUri <$> laxUri)
     , field "WARC-Truncated" (WarcTruncated <$> truncationReason)
     , field "WARC-Warcinfo-ID" (WarcWarcinfoId <$> recordId)
     , field "WARC-Filename" (WarcFilename <$> (text <|> quotedString))
@@ -243,17 +285,33 @@ header = withName "header" $ do
 
 encodeHeader :: Version -> [Field] -> BB.Builder
 encodeHeader (Version maj min) flds =
-    "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
-
-encodeDate :: UTCTime -> BB.Builder
-encodeDate = BB.string . formatTime dateFmt defaultTimeLocale
+       "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
+    <> foldMap encodeField flds
+    <> BB.char7 '\n'
 
 encodeField :: Field -> BB.Builder
 encodeField fld =
     case fld of
-        WarcRecordId (RecordId r)  -> field "WARC-Record-ID" (BB.byteString r)
-        ContentLength len          -> field "Content-Length" (BB.integerDec len)
-        WarcDate t                 -> field "WARC-Date" (encodeDate t)
+        WarcRecordId r                -> field "WARC-Record-ID" (encodeRecordId r)
+        ContentLength len             -> field "Content-Length" (BB.integerDec len)
+        WarcDate t                    -> field "WARC-Date" (encodeDate t)
+        WarcType t                    -> field "WARC-Type" (encodeWarcType t)
+        ContentType t                 -> field "Content-Type" (BB.byteString t)
+        WarcConcurrentTo r            -> field "WARC-Concurrent-To" (encodeRecordId r)
+        WarcBlockDigest d             -> field "WARC-Block-Digest" (encodeDigest d)
+        WarcPayloadDigest d           -> field "WARC-Payload-Digest" (encodeDigest d)
+        WarcIpAddress addr            -> field "WARC-IP-Address" (BB.byteString addr)
+        WarcRefersTo uri              -> field "WARC-Refers-To" (encodeUri uri)
+        WarcTargetUri uri             -> field "WARC-Target-URI" (encodeUri uri)
+        WarcTruncated t               -> field "WARC-Truncated" (encodeTruncationReason t)
+        WarcWarcinfoId r              -> field "WARC-Warcinfo-ID" (encodeRecordId r)
+        WarcFilename n                -> field "WARC-Filename" (quoted $ encodeText n)
+        WarcProfile uri               -> field "WARC-Profile" (encodeUri uri)
+        WarcSegmentNumber n           -> field "WARC-Segment-Number" (BB.integerDec n)
+        WarcSegmentTotalLength len    -> field "WARC-Segment-Total-Length" (BB.integerDec len)
   where
     field :: BB.Builder -> BB.Builder -> BB.Builder
-    field name val = name <> ": " <> val
+    field name val = name <> ": " <> val <> BB.char7 '\n'
+
+    quoted x = q <> x <> q
+      where q = BB.char7 '"'
