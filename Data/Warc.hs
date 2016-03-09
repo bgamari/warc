@@ -3,8 +3,11 @@
 module Data.Warc
     ( Record(..)
     , Warc(..)
+      -- * Parsing
     , parseWarc
     , iterRecords
+      -- * Encoding
+    , encodeRecord
     ) where
 
 import Data.Char (ord)
@@ -13,6 +16,7 @@ import qualified Pipes.ByteString as PBS
 import Control.Lens
 import qualified Pipes.Attoparsec as PA
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy.Builder as BB
 import Data.ByteString (ByteString)
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.State.Strict
@@ -62,3 +66,8 @@ iterRecords f (Warc free) = go free
           Free record -> do
               rest <- f record
               go rest
+
+encodeRecord :: Monad m => Record m a -> Producer BS.ByteString m a
+encodeRecord r = do
+    PBS.fromLazy $ BB.toLazyByteString $ encodeHeader (recWarcVersion r) (recHeader r)
+    recContent r
