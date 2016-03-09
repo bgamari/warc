@@ -139,7 +139,7 @@ warcType = choice
      , "continuation" *> pure Continuation
      , FutureType <$> utf8Token
      ]
-     
+
 newtype RecordId = RecordId ByteString
                  deriving (Show, Read, Eq, Ord)
 
@@ -206,7 +206,7 @@ date = do
     s <- takeTill isSpace
     parseTimeM False defaultTimeLocale fmt (BS.unpack s)
   where fmt = iso8601DateFormat (Just "%H:%M:%SZ")
-           
+
 warcField :: Parser Field
 warcField = choice
     [ field "WARC-Record-ID" (WarcRecordId <$> recordId)

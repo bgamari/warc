@@ -8,18 +8,14 @@ module Data.Warc
     ) where
 
 import Data.Char (ord)
-import Pipes (Producer, yield)
+import Pipes (Producer)
 import qualified Pipes.ByteString as PBS
 import Control.Lens
 import qualified Pipes.Attoparsec as PA
 import qualified Data.ByteString as BS
 import Data.ByteString (ByteString)
-import Control.Monad (void)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Either
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.State.Strict
-import Control.Error
 
 import Data.Warc.Header
 
