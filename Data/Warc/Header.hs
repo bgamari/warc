@@ -7,6 +7,7 @@ module Data.Warc.Header
     , RecordId (..)
     , TruncationReason (..)
     , Digest (..)
+    , Uri (..)
     , header
     , encodeHeader
       -- * Header field types
