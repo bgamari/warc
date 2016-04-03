@@ -33,14 +33,14 @@ instance Monad m => Functor (Record m) where
     fmap f (Record ver hdr r) = Record ver hdr (fmap f r)
 
 -- | A WARC archive
-newtype Warc m = Warc (FreeT (Record m) m (Producer BS.ByteString m ()))
+newtype Warc m a = Warc (FreeT (Record m) m (Producer BS.ByteString m a))
 
-instance Monad m => Monoid (Warc m) where
+instance (Monoid a, Monad m) => Monoid (Warc m a) where
     Warc a `mappend` Warc b = Warc (a >> b)
-    mempty = Warc (return (return ()))
+    mempty = Warc (return (return mempty))
 
 -- | Parse a WARC archive.
-parseWarc :: (Functor m, Monad m) => Producer ByteString m () -> Warc m
+parseWarc :: (Functor m, Monad m) => Producer ByteString m a -> Warc m a
 parseWarc = Warc . loop
   where
     loop upstream = FreeT $ do
@@ -60,9 +60,9 @@ parseWarc = Warc . loop
 
 -- | Iterate over the 'Record's in a WARC archive
 iterRecords :: Monad m
-            => (forall a. Record m a -> m a)    -- ^ consume the records
-            -> Warc m                           -- ^ a WARC archive (see 'parseWarc')
-            -> m (Producer BS.ByteString m ())  -- ^ returns any leftovers
+            => (forall a. Record m a -> m a)  -- ^ consume the records
+            -> Warc m a                       -- ^ a WARC archive (see 'parseWarc')
+            -> m (Producer BS.ByteString m a) -- ^ returns any leftovers
 iterRecords f (Warc free) = go free
   where
     go (FreeT action) = action >>= \next -> do
