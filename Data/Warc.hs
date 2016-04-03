@@ -33,7 +33,7 @@ instance Monad m => Functor (Record m) where
     fmap f (Record ver hdr r) = Record ver hdr (fmap f r)
 
 -- | A WARC archive
-data Warc m = Warc (FreeT (Record m) m (Producer BS.ByteString m ()))
+newtype Warc m = Warc (FreeT (Record m) m (Producer BS.ByteString m ()))
 
 instance Monad m => Monoid (Warc m) where
     Warc a `mappend` Warc b = Warc (a >> b)
