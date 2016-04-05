@@ -2,7 +2,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.Warc.Header
-    ( Version(..)
+    ( RecordHeader(..)
+    , Version(..)
     , WarcType (..)
     , RecordId (..)
     , TruncationReason (..)
@@ -274,18 +275,24 @@ warcField = choice
     , field "WARC-Segment-Total-Length" (WarcSegmentTotalLength <$> decimal)
     ]
 
+data RecordHeader = RecordHeader { recWarcVersion :: Version
+                                 , recHeaders     :: [Field]
+                                 }
+                  deriving (Show)
+
+
 -- | A WARC header
-header :: Parser (Version, [Field])
+header :: Parser RecordHeader
 header = withName "header" $ do
     skipSpace
     ver <- version <* endOfLine
     let unknownField = field token (takeTill (isEndOfLine . ord') *> return Nothing)
     fields <- withName "fields" $ many $ (Just <$> warcField) <|> unknownField
     endOfLine
-    return (ver, catMaybes fields)
+    return $ RecordHeader ver (catMaybes fields)
 
-encodeHeader :: Version -> [Field] -> BB.Builder
-encodeHeader (Version maj min) flds =
+encodeHeader :: RecordHeader -> BB.Builder
+encodeHeader (RecordHeader (Version maj min) flds) =
        "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
     <> foldMap encodeField flds
     <> BB.char7 '\n'
