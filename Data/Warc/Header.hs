@@ -33,6 +33,8 @@ module Data.Warc.Header
     , _WarcSegmentNumber
     , _WarcSegmentOriginId
     , _WarcSegmentTotalLength
+      -- * Lenses
+    , recWarcVersion, recHeaders
     ) where
 
 import Control.Applicative
@@ -275,11 +277,12 @@ warcField = choice
     , field "WARC-Segment-Total-Length" (WarcSegmentTotalLength <$> decimal)
     ]
 
-data RecordHeader = RecordHeader { recWarcVersion :: Version
-                                 , recHeaders     :: [Field]
+data RecordHeader = RecordHeader { _recWarcVersion :: Version
+                                 , _recHeaders     :: [Field]
                                  }
                   deriving (Show)
 
+makeLenses ''RecordHeader
 
 -- | A WARC header
 header :: Parser RecordHeader

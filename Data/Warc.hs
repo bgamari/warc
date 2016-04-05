@@ -55,7 +55,7 @@ parseWarc = loop
       | Nothing <- mhdr             = return $ Pure rest
       | Just (Left err) <- mhdr     = error $ show err
       | Just (Right hdr) <- mhdr
-      , Just len <- recHeaders hdr ^? each . _ContentLength = do
+      , Just len <- hdr ^? recHeaders . each . _ContentLength = do
             let produceBody = fmap consumeWhitespace . view (PBS.splitAt len)
                 consumeWhitespace = PBS.dropWhile isEOL
                 isEOL c = c == ord8 '\r' || c == ord8 '\n'
