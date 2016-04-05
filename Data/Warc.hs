@@ -16,17 +16,14 @@ module Data.Warc
 import Data.Char (ord)
 import Pipes hiding (each)
 import qualified Pipes.ByteString as PBS
-import qualified Pipes.Prelude as PP
 import Control.Lens
 import qualified Pipes.Attoparsec as PA
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Builder as BB
 import Data.ByteString (ByteString)
 import Control.Monad (join)
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.State.Strict
-import Control.Monad.Trans.Class
 
 import Data.Warc.Header
 
