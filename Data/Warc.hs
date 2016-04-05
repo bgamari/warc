@@ -26,7 +26,6 @@ import Control.Monad (join)
 import Control.Monad.Trans.Free
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class
-import Control.Monad.Morph
 
 import Data.Warc.Header
 
