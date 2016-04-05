@@ -8,6 +8,7 @@ module Data.Warc
       -- * Parsing
     , parseWarc
     , iterRecords
+    , produceRecords
       -- * Encoding
     , encodeRecord
     ) where
@@ -73,19 +74,19 @@ iterRecords f warc = iterT iter warc
          -> m (Producer BS.ByteString m a)
     iter r = join $ f r
 
--- | A produce
 produceRecords :: forall m o a. Monad m
-               => (RecordHeader -> Consumer' BS.ByteString m o)  -- ^ consume a record
-               -> Warc m a -- ^ a WARC archive (see 'parseWarc')
-               -> Producer o m (Producer BS.ByteString m a) -- ^ returns any leftovers
+               => (forall b. RecordHeader -> Producer BS.ByteString m b
+                                          -> Producer o m b)
+                  -- ^ consume the record producing some output
+               -> Warc m a
+                  -- ^ a WARC archive (see 'parseWarc')
+               -> Producer o m (Producer BS.ByteString m a)
+                  -- ^ returns any leftovers
 produceRecords f warc = iterTM iter warc
   where
     iter :: Record m (Producer o m (Producer BS.ByteString m a))
          -> Producer o m (Producer BS.ByteString m a)
-    iter (Record hdr body) = do
-        let f' :: Pipe BS.ByteString o m r
-            f' = (f hdr >>= yield) >> PP.drain
-        join $ body >-> f'
+    iter (Record hdr body) = join $ f hdr body
 
 encodeRecord :: Monad m => Record m a -> Producer BS.ByteString m a
 encodeRecord (Record hdr content) = do
