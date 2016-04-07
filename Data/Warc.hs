@@ -11,6 +11,8 @@ module Data.Warc
     , produceRecords
       -- * Encoding
     , encodeRecord
+      -- * Headers
+    , module Data.Warc.Header
     ) where
 
 import Data.Char (ord)
