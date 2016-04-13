@@ -2,17 +2,20 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.Warc.Header
-    ( RecordHeader(..)
-    , Version(..)
-    , WarcType (..)
-    , RecordId (..)
-    , TruncationReason (..)
-    , Digest (..)
-    , Uri (..)
-    , header
+    ( -- * Parsing
+      header
+      -- * Encoding
     , encodeHeader
+      -- * Types
+    , RecordHeader(..)
+    , Version(..)
+    , WarcType(..)
+    , RecordId(..)
+    , TruncationReason(..)
+    , Digest(..)
+    , Uri(..)
       -- * Header field types
-    , Field (..)
+    , Field(..)
       -- ** Prisms
     , _WarcRecordId
     , _ContentLength
