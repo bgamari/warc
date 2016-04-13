@@ -1,5 +1,5 @@
 name:                warc
-version:             0.1.1.1
+version:             0.2.0
 synopsis:            A parser for the Web Archive (WARC) format
 description:         A streaming parser for the Web Archive (WARC) format.
 homepage:            http://github.com/bgamari/warc
@@ -24,10 +24,9 @@ library
                        attoparsec >=0.12 && <0.14,
                        bytestring >=0.10 && <0.11,
                        pipes-bytestring >=2.1 && <2.2,
-                       transformers >=0.4 && <0.5,
+                       transformers >=0.4 && <0.6,
                        lens >=4.7 && <4.14,
                        pipes-attoparsec >=0.5 && <0.6,
-                       either >=4.3 && <4.5,
                        free >=4.10 && <4.13,
                        errors >=1.4 && <3.0,
                        time >=1.5 && <1.7,
@@ -51,7 +50,6 @@ executable warc-export
                        transformers,
                        lens,
                        pipes-attoparsec,
-                       either,
                        free,
                        errors,
                        time,
