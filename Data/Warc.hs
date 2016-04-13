@@ -2,9 +2,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 
+-- | WARC (or Web ARCive) is a archival file format widely used to distribute
+-- corpora of crawled web content (see, for instance the Common Crawl corpus). A
+-- WARC file consists of a set of records, each of which describes a web request
+-- or response.
+--
+-- This module provides a streaming parser and encoder for WARC archives for use
+-- with the @pipes@ package.
+--
 module Data.Warc
-    ( Record(..)
-    , Warc(..)
+    ( Warc(..)
+    , Record(..)
       -- * Parsing
     , parseWarc
     , iterRecords
@@ -31,20 +39,32 @@ import Data.Warc.Header
 
 
 -- | A WARC record
+--
+-- This represents a single record of a WARC file, consisting of a set of
+-- headers and a means of producing the record's body.
 data Record m r = Record { recHeader    :: RecordHeader
+                           -- ^ the WARC headers
                          , recContent   :: Producer BS.ByteString m r
+                           -- ^ the body of the record
                          }
 
 instance Monad m => Functor (Record m) where
     fmap f (Record hdr r) = Record hdr (fmap f r)
 
--- | A WARC archive
+-- | A WARC archive.
+--
+-- This represents a sequence of records followed by whatever data
+-- was leftover from the parse.
 type Warc m a = FreeT (Record m) m (Producer BS.ByteString m a)
 
 -- | Parse a WARC archive.
+--
+-- Note that this function does not actually do any parsing itself;
+-- it merely returns a 'Warc' value which can then be run to parse
+-- individual records.
 parseWarc :: (Functor m, Monad m)
-          => Producer ByteString m a
-          -> Warc m a
+          => Producer ByteString m a   -- ^ a producer of a stream of WARC content
+          -> Warc m a                  -- ^ the parsed WARC archive
 parseWarc = loop
   where
     loop upstream = FreeT $ do
@@ -64,9 +84,9 @@ parseWarc = loop
 
 -- | Iterate over the 'Record's in a WARC archive
 iterRecords :: forall m a. Monad m
-            => (forall b. Record m b -> m b)
-            -> Warc m a
-            -> m (Producer BS.ByteString m a)
+            => (forall b. Record m b -> m b)  -- ^ the action to run on each 'Record'
+            -> Warc m a                       -- ^ the 'Warc' file
+            -> m (Producer BS.ByteString m a) -- ^ returns any leftover data
 iterRecords f warc = iterT iter warc
   where
     iter :: Record m (m (Producer BS.ByteString m a))
@@ -80,13 +100,14 @@ produceRecords :: forall m o a. Monad m
                -> Warc m a
                   -- ^ a WARC archive (see 'parseWarc')
                -> Producer o m (Producer BS.ByteString m a)
-                  -- ^ returns any leftovers
+                  -- ^ returns any leftover data
 produceRecords f warc = iterTM iter warc
   where
     iter :: Record m (Producer o m (Producer BS.ByteString m a))
          -> Producer o m (Producer BS.ByteString m a)
     iter (Record hdr body) = join $ f hdr body
 
+-- | Encode a 'Record' in WARC format.
 encodeRecord :: Monad m => Record m a -> Producer BS.ByteString m a
 encodeRecord (Record hdr content) = do
     PBS.fromLazy $ BB.toLazyByteString $ encodeHeader hdr
