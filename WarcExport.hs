@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Data.List (isSuffixOf)
+import Data.Monoid
 import Control.Applicative
 import System.IO
 import System.FilePath

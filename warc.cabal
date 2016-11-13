@@ -42,7 +42,7 @@ executable warc-export
                        filepath,
                        exceptions,
                        pipes-zlib,
-                       optparse-applicative,
+                       optparse-applicative >= 0.12 && < 0.14,
                        pipes,
                        attoparsec,
                        bytestring,
