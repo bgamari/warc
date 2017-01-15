@@ -118,10 +118,12 @@ text = do
         content accum = do
             satisfy (isHorizontalSpace . ord')
             c <- takeTill (isEndOfLine . ord')
+            endOfLine
             continuation (accum <> TL.fromStrict (TE.decodeUtf8 c))
         continuation :: TL.Text -> Parser TL.Text
         continuation accum = content accum <|> return accum
     firstLine <- takeTill (isEndOfLine . ord')
+    endOfLine
     TL.toStrict <$> continuation (TL.fromStrict $ TE.decodeUtf8 firstLine)
 
 quotedString :: Parser Text
