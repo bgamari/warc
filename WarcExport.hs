@@ -8,7 +8,7 @@ import System.FilePath
 
 import Data.Attoparsec.ByteString.Char8
 import qualified Data.Text as T
-import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS
 import Control.Monad.IO.Class
 import Control.Monad.Catch
 
@@ -41,7 +41,9 @@ outFile r = fileName <|> recId
   where
     fileName = r ^? to recHeader . field warcFilename . _Text
     recId = r ^? to recHeader . field warcRecordId . to recIdToFileName
-    recIdToFileName (RecordId (Uri uri)) = "hello"
+    recIdToFileName (RecordId (Uri uri)) = map escape $ BS.unpack uri
+      where escape '/' = '-'
+            escape c   = c
 
 doExport :: FilePath -> FilePath -> IO ()
 doExport outDir warcPath = do
