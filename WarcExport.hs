@@ -39,8 +39,8 @@ testHeader = do
 outFile :: Record m a -> Maybe FilePath
 outFile r = fileName <|> recId
   where
-    fileName = recHeader r ^? recHeaders . each . _WarcFilename . _Text
-    recId = recHeader r ^? recHeaders . each . _WarcRecordId . to recIdToFileName
+    fileName = r ^? to recHeader . field warcFilename . _Text
+    recId = r ^? to recHeader . field warcRecordId . to recIdToFileName
     recIdToFileName (RecordId (Uri uri)) = "hello"
 
 doExport :: FilePath -> FilePath -> IO ()

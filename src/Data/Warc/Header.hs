@@ -2,6 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Data.Warc.Header
     ( -- * Parsing
@@ -20,6 +21,7 @@ module Data.Warc.Header
     , Uri(..)
       -- * Header field types
     , Field(..)
+    , field
     , lookupField
     , addField
     , mapField
@@ -46,7 +48,7 @@ module Data.Warc.Header
     ) where
 
 import Control.Applicative
-import Control.Monad (void)
+import Control.Monad (void, guard)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Time.Clock
@@ -132,13 +134,6 @@ quotedString = do
     c <- TE.decodeUtf8 <$> takeTill (== '"')
     char '"'
     return c
-
-field :: Parser name -> Parser a -> Parser a
-field name content = do
-    try name
-    char ':'
-    skipSpace
-    content <* endOfLine
 
 data WarcType = WarcInfo
               | Response
@@ -279,6 +274,18 @@ data RecordHeader = RecordHeader { _recWarcVersion :: Version
                   deriving (Show)
 
 makeLenses ''RecordHeader
+
+-- | A lens-y means of querying 'Field's.
+field :: Field a -> Traversal' RecordHeader a
+field fld = recHeaders . ix (fieldName fld) . parsedField fld
+
+parsedField :: Field a -> Prism' BSL.ByteString a
+parsedField fld = prism' to from
+  where
+    from bs = case AL.parse (decode fld) bs of
+                AL.Fail _ _ _ -> Nothing
+                AL.Done _ x   -> Just x
+    to = BB.toLazyByteString . encode fld
 
 addField :: Field a -> a -> RecordHeader -> RecordHeader
 addField fld v =
