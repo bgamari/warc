@@ -21,10 +21,12 @@ module Data.Warc.Header
     , Uri(..)
       -- * Header field types
     , Field(..)
+    , FieldName(..)
     , field
     , lookupField
     , addField
     , mapField
+    , rawField
       -- ** Standard fields
     , warcRecordId
     , contentLength
@@ -380,6 +382,9 @@ warcSegmentNumber = Field "WARC-Segment-Number" BB.integerDec decimal
 
 warcSegmentTotalLength :: Field Integer
 warcSegmentTotalLength = Field "WARC-Segment-Total-Length" BB.integerDec decimal
+
+rawField :: FieldName -> Field BSL.ByteString
+rawField fname = Field fname BB.lazyByteString takeLazyByteString
 
 quoted x = q <> x <> q
   where q = BB.char7 '"'
