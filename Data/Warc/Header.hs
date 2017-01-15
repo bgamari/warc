@@ -50,7 +50,7 @@ import Data.Time.Clock
 import Data.Time.Format
 import Data.Char (ord)
 
-import Data.Attoparsec.ByteString.Char8
+import Data.Attoparsec.ByteString.Char8 as A
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -248,6 +248,7 @@ data Field = WarcRecordId !RecordId
            | WarcSegmentNumber !Integer
            | WarcSegmentOriginId !ByteString
            | WarcSegmentTotalLength !Integer
+           | OtherField !ByteString !ByteString
            deriving (Show, Read)
 
 makePrisms ''Field
@@ -283,7 +284,18 @@ warcField = choice
     , field "WARC-Segment-Number" (WarcSegmentNumber <$> decimal)
     --, field "WARC-Segment-Origin-ID" (WarcSegmentOriginId <$> msgId)
     , field "WARC-Segment-Total-Length" (WarcSegmentTotalLength <$> decimal)
+    , otherField
     ]
+
+otherField :: Parser Field
+otherField = do
+    field <- A.takeWhile (/= ':')
+    char ':'
+    skipSpace
+    -- TODO: What about line continuations?
+    value <- A.takeWhile (/= '\n')
+    endOfLine
+    return $ OtherField field value
 
 data RecordHeader = RecordHeader { _recWarcVersion :: Version
                                  , _recHeaders     :: [Field]
@@ -328,6 +340,7 @@ encodeField fld =
         WarcProfile uri               -> field "WARC-Profile" (encodeUri uri)
         WarcSegmentNumber n           -> field "WARC-Segment-Number" (BB.integerDec n)
         WarcSegmentTotalLength len    -> field "WARC-Segment-Total-Length" (BB.integerDec len)
+        OtherField fld v              -> field (BB.byteString fld) (BB.byteString v)
   where
     field :: BB.Builder -> BB.Builder -> BB.Builder
     field name val = name <> ": " <> val <> BB.char7 '\n'
