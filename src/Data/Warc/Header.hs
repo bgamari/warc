@@ -293,12 +293,12 @@ header = withName "header" $ do
 
 encodeHeader :: RecordHeader -> BB.Builder
 encodeHeader (RecordHeader (Version maj min) flds) =
-       "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
+       "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\r\n"
     <> foldMap field (HM.toList flds)
-    <> BB.char7 '\n'
+    <> "r\n"
   where field :: (FieldName, BSL.ByteString) -> BB.Builder
         field (FieldName fname, value) =
-            TE.encodeUtf8Builder fname <> ": " <> BB.lazyByteString value <> BB.char7 '\n'
+            TE.encodeUtf8Builder fname <> ": " <> BB.lazyByteString value <> "\r\n"
 
 -- | Lookup the value of a field. Returns @Nothing@ if the field is not
 -- present, @Just (Left err)@ in the event of a parse error, and
