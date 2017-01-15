@@ -248,8 +248,9 @@ encodeDate = BB.string7 . formatTime defaultTimeLocale dateFormat
 dateFormat = iso8601DateFormat (Just "%H:%M:%SZ")
 
 warcField :: Parser (FieldName, BSL.ByteString)
-warcField = do
-    fieldName <- FieldName . TE.decodeUtf8 <$> A.takeWhile (/= ':')
+warcField = withName "field" $ do
+    peekChar' >>= guard . not . isSpace
+    fieldName <- FieldName . TE.decodeUtf8 <$> A.takeTill (== ':')
     char ':'
     skipSpace
     v0 <- takeLine
@@ -258,7 +259,7 @@ warcField = do
         continuation v = do
             c <- peekChar
             case c of
-              Just c' | isSpace c' -> do
+              Just c' | isHorizontalSpace (fromIntegral $ ord c') -> do
                             v' <- takeLine
                             endOfLine
                             continuation (v <> BB.byteString v')
@@ -268,7 +269,7 @@ warcField = do
 
 -- | Take the rest of the line (but leaving the newline character unparsed).
 takeLine :: Parser BS.ByteString
-takeLine = A.takeWhile (isEndOfLine . ord')
+takeLine = A.takeTill (isEndOfLine . ord')
 
 data RecordHeader = RecordHeader { _recWarcVersion :: Version
                                  , _recHeaders     :: HM.HashMap FieldName BSL.ByteString
