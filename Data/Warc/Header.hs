@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Data.Warc.Header
     ( -- * Parsing
@@ -18,26 +20,27 @@ module Data.Warc.Header
     , Uri(..)
       -- * Header field types
     , Field(..)
-      -- ** Prisms
-    , _WarcRecordId
-    , _ContentLength
-    , _WarcDate
-    , _WarcType
-    , _ContentType
-    , _WarcConcurrentTo
-    , _WarcBlockDigest
-    , _WarcPayloadDigest
-    , _WarcIpAddress
-    , _WarcRefersTo
-    , _WarcTargetUri
-    , _WarcTruncated
-    , _WarcWarcinfoId
-    , _WarcFilename
-    , _WarcProfile
-    , _WarcIdentifiedPayloadType
-    , _WarcSegmentNumber
-    , _WarcSegmentOriginId
-    , _WarcSegmentTotalLength
+    , lookupField
+    , addField
+    , mapField
+      -- ** Standard fields
+    , warcRecordId
+    , contentLength
+    , warcDate
+    , warcType
+    , contentType
+    , warcConcurrentTo
+    , warcBlockDigest
+    , warcPayloadDigest
+    , warcIpAddress
+    , warcRefersTo
+    , warcTargetUri
+    , warcTruncated
+    , warcWarcinfoID
+    , warcFilename
+    , warcProfile
+    , warcSegmentNumber
+    , warcSegmentTotalLength
       -- * Lenses
     , recWarcVersion, recHeaders
     ) where
@@ -49,14 +52,19 @@ import Data.Monoid ((<>))
 import Data.Time.Clock
 import Data.Time.Format
 import Data.Char (ord)
+import Data.String (IsString)
 
 import Data.Attoparsec.ByteString.Char8 as A
+import qualified Data.Attoparsec.ByteString.Lazy as AL
+import qualified Data.HashMap.Strict as HM
+import Data.Hashable (Hashable(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Builder as BB
 
 import Control.Lens
@@ -79,7 +87,10 @@ version = withName "version" $ do
     return (Version major minor)
 
 newtype FieldName = FieldName {getFieldName :: Text}
-                  deriving (Show, Read)
+                  deriving (Show, Read, IsString)
+
+instance Hashable FieldName where
+    hashWithSalt salt (FieldName t) = hashWithSalt salt (T.toCaseFold t)
 
 instance Eq FieldName where
     FieldName a == FieldName b = T.toCaseFold a == T.toCaseFold b
@@ -98,9 +109,6 @@ token = takeTill (inClass $ separators++" \t\n\r")
 
 utf8Token :: Parser Text
 utf8Token = TE.decodeUtf8 <$> token
-
-fieldName :: Parser FieldName
-fieldName = FieldName . TE.decodeUtf8 <$> token
 
 ord' = fromIntegral . ord
 
@@ -141,8 +149,8 @@ data WarcType = WarcInfo
               | FutureType !Text
               deriving (Show, Read, Ord, Eq)
 
-warcType :: Parser WarcType
-warcType = choice
+parseWarcType :: Parser WarcType
+parseWarcType = choice
      [ "warcinfo"     *> pure WarcInfo
      , "response"     *> pure Response
      , "resource"     *> pure Resource
@@ -229,30 +237,6 @@ encodeDigest :: Digest -> BB.Builder
 encodeDigest (Digest algo hash) =
     BB.byteString algo <> ":" <> BB.byteString hash
 
-data Field = WarcRecordId !RecordId
-           | ContentLength !Integer
-           | WarcDate !UTCTime
-           | WarcType !WarcType
-           | ContentType !ByteString
-           | WarcConcurrentTo !RecordId
-           | WarcBlockDigest !Digest
-           | WarcPayloadDigest !Digest
-           | WarcIpAddress !ByteString
-           | WarcRefersTo !Uri
-           | WarcTargetUri !Uri
-           | WarcTruncated !TruncationReason
-           | WarcWarcinfoId !RecordId
-           | WarcFilename !Text
-           | WarcProfile !Uri
-           | WarcIdentifiedPayloadType !ByteString
-           | WarcSegmentNumber !Integer
-           | WarcSegmentOriginId !ByteString
-           | WarcSegmentTotalLength !Integer
-           | OtherField !ByteString !ByteString
-           deriving (Show, Read)
-
-makePrisms ''Field
-
 date :: Parser UTCTime
 date = do
     s <- takeTill isSpace
@@ -263,87 +247,130 @@ encodeDate = BB.string7 . formatTime defaultTimeLocale dateFormat
 
 dateFormat = iso8601DateFormat (Just "%H:%M:%SZ")
 
-warcField :: Parser Field
-warcField = choice
-    [ field "WARC-Record-ID" (WarcRecordId <$> recordId)
-    , field "Content-Length" (ContentLength <$> decimal)
-    , field "WARC-Date" (WarcDate <$> date)
-    , field "WARC-Type" (WarcType <$> warcType)
-    , field "Content-Type" (ContentType <$> takeTill (isEndOfLine . ord'))
-    , field "WARC-Concurrent-To" (WarcConcurrentTo <$> recordId)
-    , field "WARC-Block-Digest" (WarcBlockDigest <$> digest)
-    , field "WARC-Payload-Digest" (WarcPayloadDigest <$> digest)
-    , field "WARC-IP-Address" (WarcIpAddress <$> takeTill (isEndOfLine . ord'))
-    , field "WARC-Refers-To" (WarcRefersTo <$> uri)
-    , field "WARC-Target-URI" (WarcTargetUri <$> laxUri)
-    , field "WARC-Truncated" (WarcTruncated <$> truncationReason)
-    , field "WARC-Warcinfo-ID" (WarcWarcinfoId <$> recordId)
-    , field "WARC-Filename" (WarcFilename <$> (text <|> quotedString))
-    , field "WARC-Profile" (WarcProfile <$> uri)
-    -- , field "WARC-Identified-Payload-Type" (WarcIdentifiedPayloadType <$> mediaType)
-    , field "WARC-Segment-Number" (WarcSegmentNumber <$> decimal)
-    --, field "WARC-Segment-Origin-ID" (WarcSegmentOriginId <$> msgId)
-    , field "WARC-Segment-Total-Length" (WarcSegmentTotalLength <$> decimal)
-    , otherField
-    ]
-
-otherField :: Parser Field
-otherField = do
-    field <- A.takeWhile (/= ':')
+warcField :: Parser (FieldName, BSL.ByteString)
+warcField = do
+    fieldName <- FieldName . TE.decodeUtf8 <$> A.takeWhile (/= ':')
     char ':'
     skipSpace
-    -- TODO: What about line continuations?
-    value <- A.takeWhile (/= '\n')
+    v0 <- takeLine
     endOfLine
-    return $ OtherField field value
+    let continuation :: BB.Builder -> Parser BB.Builder
+        continuation v = do
+            c <- peekChar
+            case c of
+              Just c' | isSpace c' -> do
+                            v' <- takeLine
+                            endOfLine
+                            continuation (v <> BB.byteString v')
+              _ -> return v
+    v1 <- continuation (BB.byteString v0)
+    return (fieldName, BB.toLazyByteString v1)
+
+-- | Take the rest of the line (but leaving the newline character unparsed).
+takeLine :: Parser BS.ByteString
+takeLine = A.takeWhile (isEndOfLine . ord')
 
 data RecordHeader = RecordHeader { _recWarcVersion :: Version
-                                 , _recHeaders     :: [Field]
+                                 , _recHeaders     :: HM.HashMap FieldName BSL.ByteString
                                  }
                   deriving (Show)
 
 makeLenses ''RecordHeader
+
+addField :: Field a -> a -> RecordHeader -> RecordHeader
+addField fld v =
+    recHeaders . at (fieldName fld) .~ Just (BB.toLazyByteString $ encode fld v)
 
 -- | A WARC header
 header :: Parser RecordHeader
 header = withName "header" $ do
     skipSpace
     ver <- version <* endOfLine
-    let unknownField = field token (takeTill (isEndOfLine . ord') *> return Nothing)
-    fields <- withName "fields" $ many $ (Just <$> warcField) <|> unknownField
+    fields <- fmap HM.fromList <$> withName "fields" $ many $ warcField
     endOfLine
-    return $ RecordHeader ver (catMaybes fields)
+    return $ RecordHeader ver fields
 
 encodeHeader :: RecordHeader -> BB.Builder
 encodeHeader (RecordHeader (Version maj min) flds) =
        "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\n"
-    <> foldMap encodeField flds
+    <> foldMap field (HM.toList flds)
     <> BB.char7 '\n'
+  where field :: (FieldName, BSL.ByteString) -> BB.Builder
+        field (FieldName fname, value) =
+            TE.encodeUtf8Builder fname <> ": " <> BB.lazyByteString value <> BB.char7 '\n'
 
-encodeField :: Field -> BB.Builder
-encodeField fld =
-    case fld of
-        WarcRecordId r                -> field "WARC-Record-ID" (encodeRecordId r)
-        ContentLength len             -> field "Content-Length" (BB.integerDec len)
-        WarcDate t                    -> field "WARC-Date" (encodeDate t)
-        WarcType t                    -> field "WARC-Type" (encodeWarcType t)
-        ContentType t                 -> field "Content-Type" (BB.byteString t)
-        WarcConcurrentTo r            -> field "WARC-Concurrent-To" (encodeRecordId r)
-        WarcBlockDigest d             -> field "WARC-Block-Digest" (encodeDigest d)
-        WarcPayloadDigest d           -> field "WARC-Payload-Digest" (encodeDigest d)
-        WarcIpAddress addr            -> field "WARC-IP-Address" (BB.byteString addr)
-        WarcRefersTo uri              -> field "WARC-Refers-To" (encodeUri uri)
-        WarcTargetUri uri             -> field "WARC-Target-URI" (encodeUri uri)
-        WarcTruncated t               -> field "WARC-Truncated" (encodeTruncationReason t)
-        WarcWarcinfoId r              -> field "WARC-Warcinfo-ID" (encodeRecordId r)
-        WarcFilename n                -> field "WARC-Filename" (quoted $ encodeText n)
-        WarcProfile uri               -> field "WARC-Profile" (encodeUri uri)
-        WarcSegmentNumber n           -> field "WARC-Segment-Number" (BB.integerDec n)
-        WarcSegmentTotalLength len    -> field "WARC-Segment-Total-Length" (BB.integerDec len)
-        OtherField fld v              -> field (BB.byteString fld) (BB.byteString v)
-  where
-    field :: BB.Builder -> BB.Builder -> BB.Builder
-    field name val = name <> ": " <> val <> BB.char7 '\n'
+-- | Lookup the value of a field. Returns @Nothing@ if the field is not
+-- present, @Just (Left err)@ in the event of a parse error, and
+-- @Just (Right v)@ on success.
+lookupField :: RecordHeader -> Field a -> Maybe (Either String a)
+lookupField (RecordHeader {_recHeaders=headers}) fld
+  | Just v <- HM.lookup (fieldName fld) headers
+  = case AL.parse (decode fld) v of
+      AL.Fail _ _ err -> Just $ Left err
+      AL.Done _ x     -> Just $ Right x
+  | otherwise
+  = Nothing
 
-    quoted x = q <> x <> q
-      where q = BB.char7 '"'
+data Field a = Field { fieldName :: FieldName
+                     , encode    :: a -> BB.Builder
+                     , decode    :: Parser a
+                     }
+
+mapField :: (a -> b) -> (b -> a) -> Field a -> Field b
+mapField f g (Field fieldName encode decode) =
+    Field fieldName (encode . g) (f <$> decode)
+
+warcRecordId :: Field RecordId
+warcRecordId = Field "WARC-Record-ID" encodeRecordId recordId
+
+contentLength :: Field Integer
+contentLength = Field "Content-Length" BB.integerDec decimal
+
+warcDate :: Field UTCTime
+warcDate = Field "WARC-Date" encodeDate date
+
+warcType :: Field WarcType
+warcType = Field "WARC-Type" encodeWarcType parseWarcType
+
+contentType :: Field BS.ByteString
+contentType = Field "Content-Type" BB.byteString (takeTill (isEndOfLine . ord'))
+
+warcConcurrentTo :: Field RecordId
+warcConcurrentTo = Field "WARC-Concurrent-To" encodeRecordId recordId
+
+warcBlockDigest :: Field Digest
+warcBlockDigest = Field "WARC-Block-Digest" encodeDigest digest
+
+warcPayloadDigest :: Field Digest
+warcPayloadDigest = Field "WARC-Payload-Digest" encodeDigest digest
+
+warcIpAddress :: Field BS.ByteString
+warcIpAddress = Field "WARC-IP-Address" BB.byteString (takeTill (isEndOfLine . ord'))
+
+warcRefersTo :: Field Uri
+warcRefersTo = Field "WARC-Refers-To" encodeUri uri
+
+warcTargetUri :: Field Uri
+warcTargetUri = Field "WARC-Target-URI" encodeUri laxUri
+
+warcTruncated :: Field TruncationReason
+warcTruncated = Field "WARC-Truncated" encodeTruncationReason truncationReason
+
+warcWarcinfoID :: Field RecordId
+warcWarcinfoID = Field "WARC-Warcinfo-ID" encodeRecordId recordId
+
+warcFilename :: Field T.Text
+warcFilename = Field "WARC-Filename"(quoted . encodeText) (text <|> quotedString)
+
+warcProfile :: Field Uri
+warcProfile = Field "WARC-Profile" encodeUri uri
+
+warcSegmentNumber :: Field Integer
+warcSegmentNumber = Field "WARC-Segment-Number" BB.integerDec decimal
+
+warcSegmentTotalLength :: Field Integer
+warcSegmentTotalLength = Field "WARC-Segment-Total-Length" BB.integerDec decimal
+
+quoted x = q <> x <> q
+  where q = BB.char7 '"'
+
