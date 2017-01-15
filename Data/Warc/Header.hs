@@ -6,9 +6,11 @@ module Data.Warc.Header
       header
       -- * Encoding
     , encodeHeader
+      -- * WARC Version
+    , Version(..)
+    , warc0_16
       -- * Types
     , RecordHeader(..)
-    , Version(..)
     , WarcType(..)
     , RecordId(..)
     , TruncationReason(..)
@@ -64,6 +66,9 @@ withName name parser = parser <?> name
 
 data Version = Version {versionMajor, versionMinor :: !Int}
              deriving (Show, Read, Eq, Ord)
+
+warc0_16 :: Version
+warc0_16 = Version 0 16
 
 version :: Parser Version
 version = withName "version" $ do
