@@ -306,7 +306,7 @@ encodeHeader :: RecordHeader -> BB.Builder
 encodeHeader (RecordHeader (Version maj min) flds) =
        "WARC/"<>BB.intDec maj<>"."<>BB.intDec min <> "\r\n"
     <> foldMap field (HM.toList flds)
-    <> "r\n"
+    <> "\r\n"
   where field :: (FieldName, BSL.ByteString) -> BB.Builder
         field (FieldName fname, value) =
             TE.encodeUtf8Builder fname <> ": " <> BB.lazyByteString value <> "\r\n"
