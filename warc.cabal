@@ -20,7 +20,7 @@ library
   exposed-modules:     Data.Warc, Data.Warc.Header
   other-extensions:    RankNTypes, OverloadedStrings, TemplateHaskell
   hs-source-dirs:      src
-  build-depends:       base >=4.8 && <4.10,
+  build-depends:       base >=4.8 && <4.11,
                        pipes >=4.1 && <4.3,
                        attoparsec >=0.12 && <0.14,
                        unordered-containers >=0.2 && <0.3,
