@@ -6,8 +6,6 @@ import Control.Applicative
 import System.IO
 import System.FilePath
 
-import Data.Attoparsec.ByteString.Char8
-import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as BS
 import Control.Monad.IO.Class
 import Control.Monad.Catch
@@ -19,8 +17,7 @@ import qualified Pipes.ByteString as PBS
 import qualified Pipes.GZip as GZip
 import qualified Pipes.Prelude as PP
 import Data.Warc
-import Data.Warc.Header
-import Options.Applicative as O hiding (header)
+import Options.Applicative as O hiding (header, action)
 
 withFileProducer :: (MonadIO m, MonadMask m)
                  => FilePath
@@ -31,10 +28,6 @@ withFileProducer path action = bracket (liftIO $ openFile path ReadMode) (liftIO
           | ".gz" `isSuffixOf` path = hoist liftIO $ GZip.decompress $ PBS.fromHandle h
           | otherwise               = PBS.fromHandle h
     in action prod
-
-testHeader = do
-    f <- BS.readFile "bbc.warc"
-    print $ parse header f
 
 outFile :: Record m a -> Maybe FilePath
 outFile r = fileName <|> recId
@@ -70,5 +63,7 @@ args =
 
 main :: IO ()
 main = do
-    action <- execParser (info (helper <*> args) mempty)
+    action <- execParser
+              $ info (helper <*> args)
+                     (progDesc "Export items from a WARC file to individual files")
     action
