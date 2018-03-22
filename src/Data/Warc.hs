@@ -10,6 +10,38 @@
 -- This module provides a streaming parser and encoder for WARC archives for use
 -- with the @pipes@ package.
 --
+-- Here is a simple example which walks throught the WARC file:
+--
+-- > {-# LANGUAGE RecordWildCards #-}
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > 
+-- > module Main where
+-- > 
+-- > import Control.Lens
+-- > import Control.Monad.IO.Class
+-- > import qualified Data.ByteString as B
+-- > import Data.Warc
+-- > import qualified Pipes as P
+-- > import Pipes.ByteString (fromHandle)
+-- > import System.IO
+-- > 
+-- > iterFunc :: Record IO b -> IO b
+-- > iterFunc Record {..} = do
+-- >   case recHeader ^. recHeaders . at "Content-Type" of
+-- >     Just ct -> liftIO $ putStrLn ("Content-Type: " ++ show ct)
+-- >     Nothing -> return ()
+-- >   r <-
+-- >     liftIO $ P.runEffect $ P.for recContent $ \x -> do
+-- >       liftIO $ putStrLn ("Got bytes: " ++ show (B.length x))
+-- >       return ()
+-- >   return r
+-- > 
+-- > main :: IO ()
+-- > main = do
+-- >   withFile "example.warc" ReadMode $ \h -> do
+-- >     _ <- iterRecords iterFunc (parseWarc (fromHandle h))
+-- >     return ()
+--
 module Data.Warc
     ( Warc(..)
     , Record(..)
