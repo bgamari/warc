@@ -1,5 +1,0 @@
-resolver: lts-11.1
-packages:
-- .
-extra-deps:
-- pipes-zlib-0.4.4.1
