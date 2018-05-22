@@ -22,7 +22,7 @@ library
   exposed-modules:     Data.Warc, Data.Warc.Header
   other-extensions:    RankNTypes, OverloadedStrings, TemplateHaskell
   hs-source-dirs:      src
-  build-depends:       base >=4.8 && <4.11,
+  build-depends:       base >=4.8 && <4.12,
                        pipes >=4.1 && <4.4,
                        attoparsec >=0.12 && <0.14,
                        unordered-containers >=0.2 && <0.3,
@@ -34,7 +34,7 @@ library
                        pipes-attoparsec >=0.5 && <0.6,
                        free >=4.10 && <5.1,
                        errors >=1.4 && <3.0,
-                       time >=1.5 && <1.9,
+                       time >=1.5 && <1.10,
                        text >=1.2 && <1.3,
                        mmorph >= 1.0 && <1.2
   default-language:    Haskell2010
