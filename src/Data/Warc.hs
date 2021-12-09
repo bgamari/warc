@@ -61,7 +61,7 @@ import qualified Pipes.ByteString as PBS
 import Control.Lens
 import qualified Pipes.Attoparsec as PA
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy.Builder as BB
+import qualified Data.ByteString.Builder as BB
 import Data.ByteString (ByteString)
 import Control.Monad (join)
 import Control.Monad.Trans.Free

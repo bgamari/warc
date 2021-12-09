@@ -69,7 +69,7 @@ import qualified Data.Text.Lazy as TL
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString.Lazy.Builder as BB
+import qualified Data.ByteString.Builder as BB
 
 import Control.Lens
 
