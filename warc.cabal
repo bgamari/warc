@@ -13,6 +13,12 @@ build-type:          Simple
 tested-with:         GHC ==8.0.2, GHC ==8.2.2, GHC ==8.4.1, GHC ==8.6.1, GHC == 8.8.1, GHC ==8.10.7, GHC==9.0.2, GHC ==9.2.1
 cabal-version:       >=1.10
 
+flag gzip
+  description:         Include support in the warc-export executable for
+                       transparent decompression of gzip archives.
+  manual:              True
+  default:             False
+
 source-repository head
   type:                git
   location:            git://github.com/bgamari/warc
@@ -45,7 +51,6 @@ executable warc-export
                        warc,
                        filepath,
                        exceptions,
-                       pipes-zlib,
                        optparse-applicative >= 0.12 && < 0.17,
                        pipes,
                        attoparsec,
@@ -58,4 +63,7 @@ executable warc-export
                        errors,
                        time,
                        text
+  if flag(gzip)
+    cpp-options:       -DWITH_GZIP
+    build-depends:     pipes-zlib
   default-language:    Haskell2010

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import Data.List (isSuffixOf)
@@ -14,10 +15,12 @@ import Control.Lens
 import Data.Text.Lens
 import Pipes hiding (each)
 import qualified Pipes.ByteString as PBS
-import qualified Pipes.GZip as GZip
 import qualified Pipes.Prelude as PP
 import Data.Warc
 import Options.Applicative as O hiding (header, action)
+#ifdef WITH_GZIP
+import qualified Pipes.GZip as GZip
+#endif
 
 withFileProducer :: (MonadIO m, MonadMask m)
                  => FilePath
@@ -25,7 +28,9 @@ withFileProducer :: (MonadIO m, MonadMask m)
                  -> m a
 withFileProducer path action = bracket (liftIO $ openFile path ReadMode) (liftIO . hClose) $ \h ->
     let prod
+#ifdef WITH_GZIP
           | ".gz" `isSuffixOf` path = hoist liftIO $ GZip.decompress $ PBS.fromHandle h
+#endif
           | otherwise               = PBS.fromHandle h
     in action prod
 
